@@ -233,7 +233,7 @@
 
 .pt-btn-primary {
   background: var(--pt-teal);
-  color: #fff;
+  color: #fff !important;
 }
 
 .pt-btn-primary:hover:not(:disabled) {
