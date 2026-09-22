@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { jsonError, jsonOk } from "@/lib/http";
 import { listSlotsForDate } from "@/lib/appointments";

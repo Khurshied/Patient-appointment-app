@@ -237,7 +237,10 @@ export async function rescheduleAppointment(
           start,
           durationMinutes: appt.durationMinutes,
           status: newStatus,
-          intakeAnswers: appt.intakeAnswers ?? undefined,
+          intakeAnswers:
+            appt.intakeAnswers === null
+              ? Prisma.JsonNull
+              : (appt.intakeAnswers as Prisma.InputJsonValue),
           lastChangedById: actor.id,
         },
         include,

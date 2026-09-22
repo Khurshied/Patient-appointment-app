@@ -19,6 +19,8 @@ import {
 } from "./domain";
 import { isValidIanaZone } from "./time";
 
+export type { NotificationChannels, IntakeField };
+
 export const SETTINGS_ID = "default";
 
 export type SettingsJson = {

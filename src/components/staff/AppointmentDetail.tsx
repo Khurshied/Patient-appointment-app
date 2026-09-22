@@ -23,7 +23,7 @@ export function AppointmentDetail() {
     try {
       setRow(await fetchAppointment(id));
       setError(null);
-    } catch (err) {
+    } catch {
       try {
         const list = await fetchAppointments();
         const found = list.find((item) => item.id === id) ?? null;

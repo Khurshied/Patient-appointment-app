@@ -6,7 +6,6 @@ import { isWindowOccupied, overlappingRequested } from "./contention";
 import { generateSlots } from "./slots";
 import { getOrCreateSettings, type SettingsJson } from "./settings";
 import { isStaff, type AuthUser } from "./auth";
-import { logNotifications } from "./notifications";
 import type { IntakeField } from "./domain";
 import { addMinutes } from "./time";
 
@@ -201,6 +200,8 @@ export function serializeAppointment(
     durationMinutes: appt.durationMinutes,
     status: appt.status,
     intakeAnswers: appt.intakeAnswers,
+    intake: appt.intakeAnswers,
+    typeName: appt.type.name,
     createdAt: appt.createdAt.toISOString(),
     updatedAt: appt.updatedAt.toISOString(),
     type: {

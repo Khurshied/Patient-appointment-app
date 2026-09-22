@@ -109,7 +109,7 @@ export async function POST(request: Request) {
             start,
             durationMinutes: type.durationMinutes,
             status: "requested",
-            intakeAnswers: intake,
+            intakeAnswers: intake as Prisma.InputJsonValue,
             lastChangedById: auth.user.id,
           },
           include: { type: true, patient: true },

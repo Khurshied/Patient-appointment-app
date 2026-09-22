@@ -61,7 +61,7 @@ export async function verifyOtp(
 }
 
 export function maybeDevCode(code: string): { devCode?: string } {
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV !== "production") {
     return { devCode: code };
   }
   return {};

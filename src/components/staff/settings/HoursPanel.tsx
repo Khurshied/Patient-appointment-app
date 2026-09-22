@@ -147,7 +147,7 @@ export function HoursPanel() {
             await refreshSettings();
             setOk("Hours saved");
             setError(null);
-          } catch (err) {
+          } catch {
             try {
               await patchSettings({ hoursMode: mode, weeklyHours: weekly });
               await refreshSettings();

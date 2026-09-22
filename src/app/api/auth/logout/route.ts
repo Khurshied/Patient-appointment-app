@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { clearSessionCookie, SESSION_COOKIE } from "@/lib/auth";
-import { jsonOk } from "@/lib/http";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";

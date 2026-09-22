@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { isAdmin, requireUser } from "@/lib/auth";
+import { isAdmin, isStaff, requireUser } from "@/lib/auth";
 import { jsonError, jsonOk, readJson } from "@/lib/http";
 import {
   getOrCreateSettings,
@@ -18,15 +18,42 @@ export async function GET() {
       !auth.error && auth.user && isAdmin(auth.user) ? {} : { active: true },
     orderBy: { name: "asc" },
   });
+  const typesPayload = { types, appointmentTypes: types };
+  const authFlags = { password: settings.authPassword, otp: settings.authOtp };
+
   if (!auth.error && auth.user && isAdmin(auth.user)) {
-    return jsonOk({ settings: { ...settings, types, appointmentTypes: types } });
+    return jsonOk({
+      settings: {
+        ...settings,
+        ...typesPayload,
+        auth: authFlags,
+      },
+    });
   }
+
+  if (!auth.error && auth.user && isStaff(auth.user)) {
+    return jsonOk({
+      settings: {
+        ...publicSettings(settings),
+        completeMode: settings.completeMode,
+        contentionPolicy: settings.contentionPolicy,
+        reminderOffsets: settings.reminderOffsets,
+        channels: settings.channels,
+        weeklyHours: settings.weeklyHours,
+        hoursMode: settings.hoursMode,
+        authPassword: settings.authPassword,
+        authOtp: settings.authOtp,
+        auth: authFlags,
+        ...typesPayload,
+      },
+    });
+  }
+
   return jsonOk({
     settings: {
       ...publicSettings(settings),
-      types,
-      appointmentTypes: types,
-      auth: { password: settings.authPassword, otp: settings.authOtp },
+      ...typesPayload,
+      auth: authFlags,
     },
   });
 }
