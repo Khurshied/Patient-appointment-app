@@ -1,0 +1,13 @@
+.git
+.github
+.next
+node_modules
+coverage
+*.md
+docs
+.env
+.env*.local
+!.env.example
+npm-debug.log*
+*.tsbuildinfo
+next-env.d.ts
