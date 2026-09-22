@@ -10,7 +10,7 @@ Living product spec for a **solo dentist** appointment product. Locked decisions
 
 - Let patients register (email or mobile number) and **request** an in-person appointment.
 - Give the dentist and an admin a way to **confirm or decline** requests so the calendar does not commit a slot until a human approves it.
-- Let the practice configure **appointment types** (name + duration) and **one** cancel/reschedule policy.
+- Let the practice configure **appointment types** (name + duration), **one** cancel/reschedule policy, and **one** same-slot contention policy.
 - After confirmation, remind the patient on **email, SMS, and push**.
 - Ship **web and mobile** for the same v1 capabilities.
 
@@ -35,6 +35,7 @@ Living product spec for a **solo dentist** appointment product. Locked decisions
 | Users | Patient, doctor, admin |
 | Registration | Mobile number **or** email |
 | Booking | Request → doctor or admin confirms |
+| Same-slot contention | Admin-configured; exactly one policy active (see §6) |
 | Slot lengths | Mixed; driven by admin-defined visit types |
 | Cancel / reschedule | Configurable; exactly one policy active |
 | Platforms | Web + mobile |
@@ -72,6 +73,7 @@ The doctor does not need a separate “practice settings” surface if admin cov
 - Create/edit/deactivate **appointment types** (name, duration, active flag).
 - Set **working hours** and practice timezone (timezone itself is an open question; see Round 2).
 - Set the **single active** cancel/reschedule policy.
+- Set the **single active** same-slot contention policy (how pending requests affect open slots).
 - Manage users (invite/disable doctor and admin accounts; disable a patient account if needed).
 - Configure notification channels as on/off at practice level if a provider is unavailable (default: all three on).
 
@@ -92,7 +94,7 @@ Each type has:
 **Rules**
 
 - Only **active** types appear when a patient requests a visit.
-- Open slots are generated from duration: a 45-minute type needs a contiguous free window of at least 45 minutes inside working hours, with no confirmed appointment and no blocked time overlapping that window.
+- Open slots are generated from duration: a 45-minute type needs a contiguous free window of at least 45 minutes inside working hours, with no confirmed appointment and no blocked time overlapping that window. Pending requests may also block or share that window, depending on the **same-slot contention** policy (§6).
 - Inactive types remain on historical appointments; they cannot be newly requested.
 - Duration changes apply to **new** requests only; already requested/confirmed appointments keep the duration they were booked with.
 
@@ -105,13 +107,28 @@ Each type has:
 - Recurring working hours for the single dentist (e.g. Mon–Fri 09:00–17:00, with a lunch break as blocked or as a gap in hours).
 - One-off blocked time (holiday, personal, procedure overflow).
 - Confirmed appointments (occupy the calendar).
+- Pending requests, interpreted through the active **same-slot contention** policy (below).
 - Appointment type duration.
 
-**Open slot** = a start time where `[start, start + duration)` sits entirely inside working hours and does not overlap blocked time or a **confirmed** appointment.
-
-**Pending requests** do not occupy the slot as confirmed. Whether two patients can request the same start time is an open question (Round 2). Until that is decided, the spec’s default for implementation discussion is: **allow multiple pending requests for the same window; first confirmation wins; remaining requests are auto-declined** with a notification. This default is not locked.
+**Open slot** = a start time where `[start, start + duration)` sits entirely inside working hours and does not overlap blocked time or a **confirmed** appointment, and also satisfies the active contention policy versus pending requests.
 
 Patients never type a free-form time; they pick from generated slots.
+
+### Same-slot contention (admin-configured)
+
+Admin selects **exactly one** active policy. The options are mutually exclusive. Changing the policy applies to **new** requests; existing `requested` rows keep their times until confirmed, declined, or cancelled.
+
+| Policy id | Behaviour |
+| --- | --- |
+| `queue_until_confirm` | Multiple patients may request the same (or overlapping) window. The time stays visible as open until someone is **confirmed**. First confirmation occupies the window; remaining overlapping `requested` appointments are **auto-declined** and those patients are notified. |
+| `hold_first_request` | The first request **holds** the window. Other patients cannot request an overlapping time until that request is declined or cancelled. The slot may still appear as unavailable / held rather than confirmed. |
+| `hide_on_request` | As soon as anyone successfully requests a window, that time **disappears** from the open list (same occupancy rule as a hold). Other patients never see it as bookable. If two submits race, the first persisted request wins; the second patient gets “slot no longer available.” |
+
+Overlap is measured on `[start, start + duration)` for the requested type, so a 60-minute hold at 10:00 also hides 10:00 for a 30-minute type.
+
+**Suggested default** on a new practice: `hide_on_request` (the workshop pick before this was made configurable). Admin can change it at any time.
+
+If a held or hidden request is **declined** or **cancelled** before confirm, the window becomes an open slot again (unless another confirmed visit or block still covers it).
 
 ---
 
@@ -125,9 +142,9 @@ requested → cancelled   (if the requester or staff withdraws before a decision
 
 | Status | Meaning |
 | --- | --- |
-| `requested` | Patient asked for a slot; not on the confirmed calendar. |
+| `requested` | Patient asked for a slot; not on the confirmed calendar. May still hide or hold open slots per contention policy. |
 | `confirmed` | Doctor or admin accepted; slot is occupied; reminders may fire. |
-| `declined` | Doctor or admin rejected, or system rejected after another request was confirmed for an overlapping window (if that default is adopted). |
+| `declined` | Doctor or admin rejected, or the system auto-declined because another overlapping request was confirmed under `queue_until_confirm`. |
 | `cancelled` | Confirmed or requested visit will not happen. |
 | `completed` | Visit happened (doctor/admin marks it). |
 | `no_show` | Patient did not attend (doctor/admin marks it). |
@@ -135,7 +152,7 @@ requested → cancelled   (if the requester or staff withdraws before a decision
 **Confirm / decline**
 
 - Only doctor or admin can confirm or decline.
-- Confirming occupies `[start, start + duration)` for that dentist.
+- Confirming occupies `[start, start + duration)` for that dentist. Under `queue_until_confirm`, overlapping pending requests are auto-declined at this moment.
 - Patient sees status on “My appointments”; they are notified of the decision.
 
 **v1 lightness:** completed and no_show exist so the calendar can close the day; they do not require clinical notes.
@@ -185,7 +202,7 @@ If a channel fails, other channels still send; failures are logged. No marketing
 **Store**
 
 - Identity: role, display name, email and/or mobile number, auth identifiers.
-- Appointment types, working hours, blocked time, active cancel/reschedule policy.
+- Appointment types, working hours, blocked time, active cancel/reschedule policy, active same-slot contention policy.
 - Appointments: patient, type, start, duration snapshot, status, actor who last changed status, timestamps.
 - Notification delivery records (channel, event, status, time).
 - Audit of confirm/decline/cancel (who, when).
@@ -223,6 +240,7 @@ Shared: sign in / register (email or phone), sign out.
 - Appointment types (CRUD, active flag).
 - Working hours and blocked time (practice-level).
 - Cancel/reschedule policy (single select).
+- Same-slot contention policy (single select: `queue_until_confirm`, `hold_first_request`, `hide_on_request`).
 - Users (roles, disable).
 
 Web and mobile expose the same capabilities; layout may differ. Doctor/admin tools must be usable on web; patients must be usable on mobile and web.
@@ -233,7 +251,7 @@ Web and mobile expose the same capabilities; layout may differ. Doctor/admin too
 
 1. Patient registers with email or mobile number.
 2. Patient chooses an active appointment type (duration comes from that type).
-3. Patient picks an open slot and submits a **request**.
+3. Patient picks an open slot and submits a **request**. Availability already applied the active contention policy, so the slot list should not offer times the policy treats as taken. If a race occurs, show “slot no longer available.”
 4. Doctor or admin is notified and confirms or declines.
 5. If confirmed, the slot is occupied; patient is notified; reminders are scheduled on email, SMS, and push.
 6. Patient attends; doctor marks completed (or no-show / cancelled per policy).
@@ -244,16 +262,15 @@ Web and mobile expose the same capabilities; layout may differ. Doctor/admin too
 
 Ask these **one at a time** to tighten the spec. They are not locked.
 
-1. **Pending overlap:** If two patients request the same slot, do we queue both until one is confirmed, hold the slot for the first request, or hide the slot as soon as anyone requests it?
-2. **Reminder timing:** How many reminders, and how far before the visit (e.g. 24 hours and 1 hour)?
-3. **Timezone / locale:** Practice city and timezone? Display language(s)?
-4. **Auth proof:** Password vs OTP-only (SMS/email codes) vs both?
-5. **Doctor vs admin:** Can the dentist also be the only admin (one login, two roles), or always two accounts?
-6. **Working hours model:** Recurring weekly template only, or exceptions (e.g. every other Saturday)?
-7. **New patient intake:** Any extra fields on first request (name, date of birth), or identity + slot is enough?
-8. **No-show / complete:** Required before the next day, or optional hygiene for the calendar?
-9. **Tech stack:** Any preference (e.g. React/Next + Postgres, Flutter vs React Native) or greenfield choice is fine?
-10. **Push:** Same backend for iOS and Android; is a later PWA-only push acceptable for web, or native apps required on day one?
+1. **Reminder timing:** How many reminders, and how far before the visit (e.g. 24 hours and 1 hour)?
+2. **Timezone / locale:** Practice city and timezone? Display language(s)?
+3. **Auth proof:** Password vs OTP-only (SMS/email codes) vs both?
+4. **Doctor vs admin:** Can the dentist also be the only admin (one login, two roles), or always two accounts?
+5. **Working hours model:** Recurring weekly template only, or exceptions (e.g. every other Saturday)?
+6. **New patient intake:** Any extra fields on first request (name, date of birth), or identity + slot is enough?
+7. **No-show / complete:** Required before the next day, or optional hygiene for the calendar?
+8. **Tech stack:** Any preference (e.g. React/Next + Postgres, Flutter vs React Native) or greenfield choice is fine?
+9. **Push:** Same backend for iOS and Android; is a later PWA-only push acceptable for web, or native apps required on day one?
 
 ---
 
@@ -262,3 +279,4 @@ Ask these **one at a time** to tighten the spec. They are not locked.
 | Date | Change |
 | --- | --- |
 | 2026-09-22 | Initial v1 spec from workshop answers (solo dentist, request/approve, configurable types and cancel policy, web+mobile, email/SMS/push, no payments). |
+| 2026-09-22 | Same-slot contention is admin-configured (`queue_until_confirm`, `hold_first_request`, `hide_on_request`); suggested default `hide_on_request`. |
