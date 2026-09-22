@@ -43,10 +43,15 @@ export function AppointmentDetailView({
   settings: Settings;
 }) {
   const router = useRouter();
-  const actions = useMemo(
+  const computed = useMemo(
     () => patientActions(appointment, settings.cancelPolicy),
     [appointment, settings.cancelPolicy],
   );
+  const actions = {
+    canCancel: appointment.actions?.canCancel ?? computed.canCancel,
+    canReschedule: appointment.actions?.canReschedule ?? computed.canReschedule,
+    reason: computed.reason,
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);

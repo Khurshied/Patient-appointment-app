@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   api,
   errorMessage,
@@ -17,20 +17,8 @@ import { Alert, Button, EmptyState, Field } from "./ui";
 
 const STEPS = ["Visit type", "About you", "Date", "Time", "Review"] as const;
 
-function requiredIntake(fields: IntakeField[], me: Me | null) {
-  return fields.filter((f) => {
-    if (f.requirement !== "required") return false;
-    const key = f.key;
-    if (key === "displayName" || key === "display_name" || key === "name") {
-      if (me?.displayName?.trim()) return false;
-    }
-    if (key === "dateOfBirth" || key === "dob" || key === "date_of_birth") {
-      if (me?.dateOfBirth) return false;
-    }
-    const existing = me?.profile?.[key];
-    if (existing !== undefined && existing !== null && String(existing).trim()) return false;
-    return true;
-  });
+function requiredIntake(fields: IntakeField[]) {
+  return fields.filter((f) => f.requirement === "required");
 }
 
 export function RequestWizard({
@@ -48,7 +36,15 @@ export function RequestWizard({
   const types = settings.appointmentTypes.filter((t) => t.active);
   const [step, setStep] = useState(0);
   const [typeId, setTypeId] = useState(initialTypeId ?? "");
-  const [intake, setIntake] = useState<Record<string, string>>({});
+  const [intake, setIntake] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    if (me?.displayName) initial.displayName = me.displayName;
+    if (me?.dateOfBirth) {
+      initial.dob = me.dateOfBirth.slice(0, 10);
+      initial.dateOfBirth = me.dateOfBirth.slice(0, 10);
+    }
+    return initial;
+  });
   const [date, setDate] = useState(() => ymdInZone(new Date(), settings.timezone));
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [slotsError, setSlotsError] = useState<string | null>(null);
@@ -57,8 +53,18 @@ export function RequestWizard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!me) return;
+    setIntake((prev) => ({
+      ...prev,
+      displayName: prev.displayName || me.displayName || "",
+      dob: prev.dob || me.dateOfBirth?.slice(0, 10) || "",
+      dateOfBirth: prev.dateOfBirth || me.dateOfBirth?.slice(0, 10) || "",
+    }));
+  }, [me]);
+
   const selectedType: AppointmentType | undefined = types.find((t) => t.id === typeId);
-  const needed = useMemo(() => requiredIntake(settings.intakeFields, me), [settings.intakeFields, me]);
+  const needed = useMemo(() => requiredIntake(settings.intakeFields), [settings.intakeFields]);
   const optionalVisible = settings.intakeFields.filter((f) => f.requirement === "optional");
   const intakeFields = [...needed, ...optionalVisible.filter((f) => !needed.some((n) => n.key === f.key))];
 
@@ -123,7 +129,7 @@ export function RequestWizard({
       if (rescheduleId) {
         await api(`/api/appointments/${encodeURIComponent(rescheduleId)}/reschedule`, {
           method: "POST",
-          body: JSON.stringify({ start, typeId, intake: cleaned }),
+          body: JSON.stringify({ start }),
         });
       } else {
         await api("/api/appointments", {

@@ -141,6 +141,7 @@ export type Appointment = {
   durationMinutes: number;
   status: AppointmentStatus;
   intake: Record<string, unknown> | null;
+  actions: { canCancel: boolean; canReschedule: boolean } | null;
 };
 
 export type Slot = {
@@ -360,6 +361,7 @@ export function parseAppointment(raw: unknown): Appointment | null {
       : isRecord(rec.answers)
         ? rec.answers
         : null;
+  const actionsRec = isRecord(rec.actions) ? rec.actions : null;
   return {
     id: String(rec.id),
     typeId,
@@ -369,6 +371,12 @@ export function parseAppointment(raw: unknown): Appointment | null {
     durationMinutes,
     status,
     intake,
+    actions: actionsRec
+      ? {
+          canCancel: bool(actionsRec.canCancel),
+          canReschedule: bool(actionsRec.canReschedule),
+        }
+      : null,
   };
 }
 
@@ -426,7 +434,7 @@ export async function fetchSettings(): Promise<Settings> {
   const data = await api("/api/settings");
   const settings = parseSettings(data);
   if (settings.appointmentTypes.length === 0) {
-    for (const path of ["/api/appointment-types", "/api/types"]) {
+    for (const path of ["/api/types", "/api/appointment-types"]) {
       try {
         const typesData = await api(path);
         const types = parseTypes(unwrap(typesData, ["appointmentTypes", "types", "items", "data"]));

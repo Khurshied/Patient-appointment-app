@@ -70,18 +70,11 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
       const data = await api("/api/auth/register", { method: "POST", body: JSON.stringify(body) });
       const maybe = extractDevCode(data);
       if (maybe) setDevCode(maybe);
-      if (otpOn) {
-        try {
-          const otp = await api("/api/auth/otp/request", {
-            method: "POST",
-            body: JSON.stringify({ identifier: identifier.trim() }),
-          });
-          const codeFromOtp = extractDevCode(otp);
-          if (codeFromOtp) setDevCode(codeFromOtp);
-          setOtpSent(true);
-        } catch {
-          await afterAuth();
-        }
+      const needsOtp = Boolean(
+        data && typeof data === "object" && "needsOtp" in data && (data as { needsOtp?: boolean }).needsOtp,
+      );
+      if (needsOtp) {
+        setOtpSent(true);
       } else {
         await afterAuth();
       }
