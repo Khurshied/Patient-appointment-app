@@ -47,6 +47,68 @@ OTP is enabled by default. In non-production, `POST /api/auth/otp/request` (and 
 
 Session cookie name: `session` (httpOnly, SameSite=Lax).
 
+## Environment
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | yes | Postgres connection string. Prisma **generate** and **migrate** both read it. A dummy URL is enough for `prisma generate` / `next build`; a real database is required at runtime. |
+| `NODE_ENV` | no | `development` locally; `production` for `next start` / Docker. |
+| `PORT` | no | Listen port (default `3000`). |
+| `HOSTNAME` | no | Bind address for the container (`0.0.0.0` in Docker). |
+| `SEED_ON_START` | no | Docker only. Set `true` to run `prisma db seed` after migrate (demo dentist account). |
+
+Copy [`.env.example`](.env.example) for local development and [`.env.production.example`](.env.production.example) as a checklist for hosts.
+
+## Production build
+
+```bash
+cp .env.example .env
+npm ci
+npx prisma generate          # also runs from npm run build / postinstall
+npx prisma migrate deploy
+npx prisma db seed           # optional demo data
+npm run build                # prisma generate && next build
+npm start                    # next start (output: standalone)
+```
+
+`npm run build` does not need a live database. `npm start` does.
+
+Health check: `GET /api/health` → `{ "ok": true }`.
+
+## Deploy
+
+This environment has no Vercel / Fly / Railway / registry credentials, so there is **no live public URL** from this change. Use one of the paths below.
+
+### Docker Compose (Postgres + app)
+
+Requires Docker Engine and Compose v2.
+
+```bash
+# optional: SEED_ON_START=true (default in compose) for demo credentials
+docker compose up --build
+```
+
+Then open [http://localhost:3000](http://localhost:3000) and hit [http://localhost:3000/api/health](http://localhost:3000/api/health).
+
+The image runs `prisma migrate deploy` on start. Default DB: `postgresql://appointments:appointments@db:5432/appointments`.
+
+### Vercel
+
+1. Import the GitHub repo in Vercel (framework is Next.js; see [`vercel.json`](vercel.json)).
+2. Set `DATABASE_URL` to a hosted Postgres (Neon, Supabase, Vercel Postgres, RDS).
+3. After the first deploy (or as a release command), run migrations:
+
+```bash
+npx prisma migrate deploy
+npx prisma db seed   # optional
+```
+
+`postinstall` / `npm run build` already run `prisma generate`. Do not commit secrets; configure them in the Vercel project.
+
+### GitHub Actions
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `npm ci`, `prisma generate`, `npm test`, and `npm run build` on pushes to `main` / `cursor/**` and on PRs targeting `main`. It uses a dummy `DATABASE_URL` (no Postgres service).
+
 ## Happy path
 
 1. Register a patient, verify OTP, request a slot (`/request`).
