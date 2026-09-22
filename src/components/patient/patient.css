@@ -440,6 +440,8 @@
 
 .pt-date-nav input[type="date"] {
   flex: 1;
+  min-width: 12rem;
+  color-scheme: light;
 }
 
 .pt-footer-note {
